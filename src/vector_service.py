@@ -12,13 +12,23 @@ from src.config import Config, logger
 class IntechVectorService:
     """
     Service class to manage vector indexing, persistence, and query execution
-    using Google Gemini models.
+    using the latest Gemini 1.5 Pro infrastructure.
     """
 
     def __init__(self):
-        # Configure Global Settings for LlamaIndex
-        Settings.llm = Gemini(model_name="models/gemini-pro", api_key=Config.GEMINI_API_KEY)
-        Settings.embed_model = GeminiEmbedding(model_name="models/embedding-001", api_key=Config.GEMINI_API_KEY)
+        # Global Settings Configuration (2026 Standards)
+        # Using Gemini 1.5 Pro for advanced technical reasoning
+        Settings.llm = Gemini(
+            model_name="models/gemini-1.5-pro", 
+            api_key=Config.GEMINI_API_KEY
+        )
+        # Using text-embedding-004 for high-precision retrieval
+        Settings.embed_model = GeminiEmbedding(
+            model_name="models/text-embedding-004", 
+            api_key=Config.GEMINI_API_KEY
+        )
+        
+        # Optimized for engineering documentation
         Settings.chunk_size = 1024
         Settings.chunk_overlap = 100
         
@@ -26,55 +36,42 @@ class IntechVectorService:
 
     def build_or_load_index(self, documents: list = None):
         """
-        Initializes the vector index. Loads from local storage if available; 
-        otherwise, generates a new index from provided documents.
+        Initializes the vector index. Prioritizes local storage to minimize API latency.
         """
         storage_dir = Config.STORAGE_DIR
 
         if os.path.exists(storage_dir) and os.listdir(storage_dir):
-            logger.info("Loading existing vector index from local storage.")
+            logger.info("Local vector index detected. Loading from storage.")
             storage_context = StorageContext.from_defaults(persist_dir=storage_dir)
             self.index = load_index_from_storage(storage_context)
         else:
             if not documents:
-                logger.error("No index found and no documents provided for initialization.")
+                logger.error("Initialization failed: No documents provided and no index found.")
                 return None
             
-            logger.info("Creating new vector index from provided documents.")
+            logger.info("Initializing new vector index. This process may take a moment.")
             self.index = VectorStoreIndex.from_documents(documents)
             self.index.storage_context.persist(persist_dir=storage_dir)
-            logger.info(f"Index successfully persisted to {storage_dir}.")
+            logger.info(f"Indexing complete. Knowledge base persisted to {storage_dir}.")
         
         return self.index
 
     def execute_query(self, user_query: str):
         """
-        Performs a semantic search and generates a response based on retrieved context.
+        Executes semantic retrieval and generates a response grounded in Intech data.
         """
         if not self.index:
-            logger.warning("Query execution attempted on uninitialized index.")
-            return "System not ready. Please index documents first."
+            logger.warning("Query ignored: Vector index is not initialized.")
+            return "The knowledge base is currently offline. Please refresh the system."
 
-        logger.info(f"Processing query: {user_query}")
+        logger.info(f"Technical Inquiry Received: {user_query}")
+        
+        # Configure the engine to retrieve the top 5 most relevant fragments
         query_engine = self.index.as_query_engine(similarity_top_k=5)
         
         try:
             response = query_engine.query(user_query)
             return response
         except Exception as e:
-            logger.error(f"Error during query execution: {str(e)}")
-            return "An error occurred while retrieving technical information."
-
-if __name__ == "__main__":
-    # Integration Test
-    from src.drive_loader import IntechDriveLoader
-    
-    loader = IntechDriveLoader()
-    # Note: This test requires a valid credentials.json and API Key
-    try:
-        docs = loader.load_documents()
-        service = IntechVectorService()
-        service.build_or_load_index(docs)
-        print("Success: Vector Service is operational.")
-    except Exception as e:
-        print(f"Test Failed: {e}")
+            logger.error(f"Execution Error during RAG process: {str(e)}")
+            return "A technical error occurred during data retrieval. Please verify API connectivity."
