@@ -64,8 +64,7 @@ class IntechDriveLoader:
 
         try:
             documents = self.loader.load_data(
-                folder_id=self.folder_id,
-                recursive=True
+                folder_id=self.folder_id
             )
 
             # Exclude operational exports — check all possible metadata key names
