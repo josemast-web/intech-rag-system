@@ -1,12 +1,11 @@
 import os
 import json
-import logging
 from typing import List, Optional
 
 import streamlit as st
-from google.oauth2 import service_account
 from llama_index.readers.google import GoogleDriveReader
 from src.config import Config, logger
+
 
 class IntechDriveLoader:
     """
@@ -19,29 +18,23 @@ class IntechDriveLoader:
         self.excluded_files = Config.EXCLUDED_FILES
         self.loader: Optional[GoogleDriveReader] = None
 
-    def _build_credentials(self):
-        """Builds ServiceAccountCredentials from st.secrets or local file."""
-        scopes = ["https://www.googleapis.com/auth/drive.readonly"]
+    def _build_credentials_dict(self) -> dict:
+        """Returns raw service account dict from st.secrets or local file."""
 
         # -- Streamlit Cloud: read from st.secrets --
         if "gcp_service_account" in st.secrets:
             logger.info("Loading credentials from st.secrets.")
             creds_dict = {k: v for k, v in st.secrets["gcp_service_account"].items()}
-            # Unescape newlines in private_key (TOML flattens them)
+            # Unescape newlines in private_key (TOML encoding flattens them)
             if "private_key" in creds_dict:
                 creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-            return service_account.Credentials.from_service_account_info(
-                creds_dict, scopes=scopes
-            )
+            return creds_dict
 
         # -- Local fallback: credentials.json --
         if os.path.exists("credentials.json"):
             logger.info("Loading credentials from credentials.json.")
             with open("credentials.json") as f:
-                creds_dict = json.load(f)
-            return service_account.Credentials.from_service_account_info(
-                creds_dict, scopes=scopes
-            )
+                return json.load(f)
 
         raise FileNotFoundError(
             "No credentials found. Configure [gcp_service_account] in "
@@ -49,11 +42,11 @@ class IntechDriveLoader:
         )
 
     def initialize_loader(self):
-        """Initializes GoogleDriveReader with resolved service account credentials."""
+        """Initializes GoogleDriveReader using service_account_key dict."""
         try:
-            creds = self._build_credentials()
-            # Pass credentials object directly — no file path needed
-            self.loader = GoogleDriveReader(credentials=creds)
+            creds_dict = self._build_credentials_dict()
+            # GoogleDriveReader requires service_account_key as raw dict
+            self.loader = GoogleDriveReader(service_account_key=creds_dict)
             logger.info("Google Drive Reader initialized successfully.")
         except Exception as e:
             logger.error("Drive Reader initialization failed: %s", str(e))
@@ -75,7 +68,7 @@ class IntechDriveLoader:
                 recursive=True
             )
 
-            # Filter operational exports — check all possible metadata key names
+            # Exclude operational exports — check all possible metadata key names
             filtered = [
                 doc for doc in documents
                 if not any(
