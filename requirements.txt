@@ -1,0 +1,10 @@
+llama-index
+llama-index-readers-google
+llama-index-llms-gemini
+llama-index-embeddings-gemini
+streamlit
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+python-dotenv
