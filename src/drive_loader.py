@@ -5,14 +5,13 @@ from typing import List, Optional
 
 import streamlit as st
 from google.oauth2 import service_account
-from googleapiclient.discovery import build
 from llama_index.readers.google import GoogleDriveReader
 from src.config import Config, logger
 
 class IntechDriveLoader:
     """
     Manages document extraction from Google Drive.
-    Authenticates via st.secrets (Streamlit Cloud) or credentials.json (local).
+    Auth priority: st.secrets (Streamlit Cloud) > credentials.json (local).
     """
 
     def __init__(self):
@@ -20,54 +19,50 @@ class IntechDriveLoader:
         self.excluded_files = Config.EXCLUDED_FILES
         self.loader: Optional[GoogleDriveReader] = None
 
-    def _get_credentials(self):
-        """
-        Builds ServiceAccountCredentials from st.secrets or local JSON file.
-        Priority: st.secrets > credentials.json
-        """
+    def _build_credentials(self):
+        """Builds ServiceAccountCredentials from st.secrets or local file."""
         scopes = ["https://www.googleapis.com/auth/drive.readonly"]
 
-        # --- Streamlit Cloud path: read from st.secrets ---
+        # -- Streamlit Cloud: read from st.secrets --
         if "gcp_service_account" in st.secrets:
             logger.info("Loading credentials from st.secrets.")
-            creds_dict = dict(st.secrets["gcp_service_account"])
-            # private_key newlines must be unescaped when coming from TOML
+            creds_dict = {k: v for k, v in st.secrets["gcp_service_account"].items()}
+            # Unescape newlines in private_key (TOML flattens them)
             if "private_key" in creds_dict:
                 creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
             return service_account.Credentials.from_service_account_info(
                 creds_dict, scopes=scopes
             )
 
-        # --- Local fallback: read from credentials.json ---
-        local_path = "credentials.json"
-        if os.path.exists(local_path):
+        # -- Local fallback: credentials.json --
+        if os.path.exists("credentials.json"):
             logger.info("Loading credentials from credentials.json.")
-            with open(local_path) as f:
+            with open("credentials.json") as f:
                 creds_dict = json.load(f)
             return service_account.Credentials.from_service_account_info(
                 creds_dict, scopes=scopes
             )
 
         raise FileNotFoundError(
-            "No credentials found. Add [gcp_service_account] to st.secrets "
-            "or place credentials.json in the project root."
+            "No credentials found. Configure [gcp_service_account] in "
+            "Streamlit secrets or place credentials.json in project root."
         )
 
     def initialize_loader(self):
-        """Initializes GoogleDriveReader using resolved credentials."""
+        """Initializes GoogleDriveReader with resolved service account credentials."""
         try:
-            creds = self._get_credentials()
-            # GoogleDriveReader accepts a credentials object directly
+            creds = self._build_credentials()
+            # Pass credentials object directly — no file path needed
             self.loader = GoogleDriveReader(credentials=creds)
             logger.info("Google Drive Reader initialized successfully.")
         except Exception as e:
-            logger.error("Failed to initialize Drive Reader: %s", str(e))
+            logger.error("Drive Reader initialization failed: %s", str(e))
             raise
 
     def load_documents(self) -> List:
         """
-        Fetches and filters documents from the configured Drive folder.
-        Returns list of documents ready for indexing.
+        Loads and filters documents from the configured Drive folder.
+        Returns list of LlamaIndex Document objects.
         """
         if not self.loader:
             self.initialize_loader()
@@ -80,7 +75,7 @@ class IntechDriveLoader:
                 recursive=True
             )
 
-            # Exclude operational files (e.g. Data_Monday exports)
+            # Filter operational exports — check all possible metadata key names
             filtered = [
                 doc for doc in documents
                 if not any(
@@ -95,5 +90,5 @@ class IntechDriveLoader:
             return filtered
 
         except Exception as e:
-            logger.error("Error during document ingestion: %s", str(e))
+            logger.error("Document ingestion failed: %s", str(e))
             return []
