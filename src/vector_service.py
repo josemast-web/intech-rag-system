@@ -19,7 +19,7 @@ class IntechVectorService:
         # Global Settings Configuration (2026 Standards)
         # Using Gemini 1.5 Pro for advanced technical reasoning
         Settings.llm = Gemini(
-            model_name="models/gemini-1.5-pro", 
+            model_name="models/gemini-1.5-flash-latest", 
             api_key=Config.GEMINI_API_KEY
         )
         # Using text-embedding-004 for high-precision retrieval
