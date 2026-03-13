@@ -18,7 +18,7 @@ class IntechVectorService:
     def __init__(self):
         
         Settings.llm = Gemini(
-            model_name="models/gemini-1.5-flash", 
+            model_name="models/gemini-2.0-flash", 
             api_key=Config.GEMINI_API_KEY
         )
         # Using text-embedding-004 for high-precision retrieval
